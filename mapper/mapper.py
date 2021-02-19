@@ -40,6 +40,7 @@ class Mapper:
     def get_links(self, url: str, root_url = None) -> set:
         """
         Gets external links from all pages on a domain. 
+        This won't function on sites that require javascript.
 
         Args:
             url (str): a url with the protocol.

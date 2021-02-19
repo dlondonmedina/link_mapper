@@ -131,3 +131,5 @@ dmypy.json
 
 .vscode/
 *.png
+geckodriver.log 
+graph.json
