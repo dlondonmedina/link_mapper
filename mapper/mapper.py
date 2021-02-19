@@ -1,7 +1,9 @@
 import requests 
 import re
+import json
 import matplotlib.pyplot as plt
 import networkx as nx
+from networkx.readwrite import json_graph
 from time import sleep
 from random import randint
 from bs4 import BeautifulSoup
@@ -51,7 +53,7 @@ class Mapper:
             return output 
 
         if root_url == None:
-            root_url = url
+            root_url = url[:url.rfind("/") + 1] if url.rfind("/") != -1 else url 
 
         output  = set()
 
@@ -75,17 +77,31 @@ class Mapper:
 
         for l in soup.find_all('a'):
             tmp = l.get('href')
-            if tmp == None or "javascript:" in tmp or "mailto:" in tmp or "#" in tmp: # javascript button, same page link
-                pass
-            elif tmp[:2] == "//": # add protocol
+            
+            if tmp == None:
+                continue 
+            
+            # Remove params
+            tmp = tmp[:tmp.find("?")] if tmp.find("?") > -1 else tmp 
+            
+            # Add protocol
+            if tmp[:2] == "//":
                 tmp = "https:" + tmp 
-                output.add(tmp)     
-            elif re.search("https?://*", tmp) is not None: # external link
+            
+            # if it's external link, add to external link set.
+            if re.search(r"^https?://", tmp) is not None and root_url not in tmp:
                 output.add(tmp)
+
+            elif ":" in tmp.strip(r'^https?://') or "#" in tmp: 
+                #ignore None or special links or same page links
+                continue
             else:
-                tmp = tmp.strip("./")
+                filters = [r"\./", r"\.\./"]
+                for f in filters:
+                    tmp = re.sub(f, "/", tmp)
                 
-                tmp = root_url.strip("/") + "/" + tmp
+                tmp = tmp if root_url in tmp else root_url.strip("/") + tmp
+
                 if tmp not in self.visited:
                     self.visited.add(tmp)
                     print("Found internal link...friendly spiders wait")
@@ -107,9 +123,11 @@ class Mapper:
             ex_links (set): The set of external links from url.
 
         """
-        self.g.add_node(url)
-        self.g.add_nodes_from(ex_links)
-        self.g.add_edges_from([(url, l) for l in ex_links])
+        domain = self.get_domain(url)
+
+        for l in ex_links:
+            link = self.get_domain(l)
+            self.g.add_edge(domain, link)
 
 
     def print_graph(self, labels: bool = True):
@@ -119,6 +137,9 @@ class Mapper:
         Args: 
             labels (bool): True if the graph should be labelled.
         """
+        # Write to JSON first
+        with open('graph.json', 'w') as f:
+            f.write(json.dumps(json_graph.node_link_data(self.g)))
 
         if labels:
             nx.draw_networkx(self.g)
@@ -127,7 +148,7 @@ class Mapper:
         plt.savefig("map.png")
 
 
-    def crawl(self, urls: set, depth: int = 2):
+    def crawl(self, urls: set, depth: int = 2, excluded_domains: set = None):
         """
         Main crawl method that crawls the input list of urls.
 
@@ -140,10 +161,17 @@ class Mapper:
             return
 
         for url in urls:
+            if any([d in url for d in excluded_domains]):
+                continue 
+
             ex_links = self.get_links(url)
             self.build_graph(url, ex_links)
-            self.crawl(ex_links, depth - 1)
+            self.crawl(ex_links, depth - 1, excluded_domains)
         
 
+    def get_domain(self, url: str) -> str:
     
+        d = re.search('https?://([A-Za-z_0-9.-]+).*', url)
+        d = d.group(1)
+        return d
 
