@@ -38,6 +38,6 @@ print("will take for me to finish.")
 
 depth = int(input("How many hops (1-10)"))
 
-m.crawl(urls, 2, excluded_domains=excludeed_domains)
+m.crawl(urls, depth, excluded_domains=excludeed_domains)
 
 m.print_graph()

@@ -1,6 +1,7 @@
 import requests 
 import re
 import json
+import time
 import matplotlib.pyplot as plt
 import networkx as nx
 from networkx.readwrite import json_graph
@@ -54,9 +55,13 @@ class Mapper:
             return output 
 
         if root_url == None:
-            root_url = url[:url.rfind("/") + 1] if url.rfind("/") != -1 else url 
+            if url.rfind("/") == -1:
+                root_url = url
+            else:
+                root_url = url[:url.rfind("/") + 1]
 
-        output  = set()
+        elif re.search("https?://*", root_url) is None:
+            return output
 
         try:
             print("Visiting {}!".format(url))
@@ -78,8 +83,9 @@ class Mapper:
 
         for l in soup.find_all('a'):
             tmp = l.get('href')
-            
-            if tmp == None:
+            filter = [None, "", "/", "./", "../", "#", ".", ".."]
+
+            if tmp in filter:
                 continue 
             
             # Remove params
@@ -97,11 +103,17 @@ class Mapper:
                 #ignore None or special links or same page links
                 continue
             else:
-                filters = [r"\./", r"\.\./"]
+                filters = ["./", "../", "/."]
                 for f in filters:
-                    tmp = re.sub(f, "/", tmp)
+                    tmp = tmp.replace(f, "/")
                 
-                tmp = tmp if root_url in tmp else root_url.strip("/") + tmp
+                if root_url not in tmp:
+                    if tmp[0] == "/" and root_url[-1] == "/":
+                        tmp = root_url.strip("/") + tmp 
+                    elif tmp[0] != "/" and root_url[-1] != "/":
+                        tmp = root_url + "/" + tmp 
+                    else:
+                        tmp = root_url + tmp
 
                 if tmp not in self.visited:
                     self.visited.add(tmp)
@@ -139,14 +151,15 @@ class Mapper:
             labels (bool): True if the graph should be labelled.
         """
         # Write to JSON first
-        with open('graph.json', 'w') as f:
+        timestamp = int(time.time())
+        with open('graph{}.json'.format(timestamp), 'w') as f:
             f.write(json.dumps(json_graph.node_link_data(self.g)))
 
         if labels:
             nx.draw_networkx(self.g)
         else:
             nx.draw(self.g)
-        plt.savefig("map.png")
+        plt.savefig("map{}.png".format(timestamp))
 
 
     def crawl(self, urls: set, depth: int = 2, excluded_domains: set = None):
